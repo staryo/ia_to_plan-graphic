@@ -1,0 +1,14 @@
+pyyaml==5.4.1
+requests==2.26.0
+
+urllib3~=1.26.7
+pymongo~=3.12.1
+sshtunnel~=0.4.0
+pika~=1.2.0
+
+cryptography==3.2.1
+bcrypt==3.1.7
+
+pynacl==1.4.0
+
+tqdm

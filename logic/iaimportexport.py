@@ -653,6 +653,7 @@ class IAImportExport(Base):
 
         operation_dict = list_to_dict(tasks['operation'])
         entity_routes_dict = list_to_dict(tasks['entity_route'])
+        department_dict = list_to_dict(self._get_from_rest_collection('department'))
 
         report = defaultdict(
             lambda: defaultdict(
@@ -666,7 +667,12 @@ class IAImportExport(Base):
             entity_route_id = operation_dict[row['operation_id']][
                 'entity_route_id']
             nop = operation_dict[row['operation_id']]['nop']
-
+            if self.config['skip_dept'] is not None:
+                if department_dict[operation_dict[row['operation_id']]['department_id']]['identity'] in self.config['skip_dept']:
+                    continue
+            if self.config['only_dept'] is not None:
+                if department_dict[operation_dict[row['operation_id']]['department_id']]['identity'] not in self.config['only_dept']:
+                    continue
             if 'Ц' == operation_dict[row['operation_id']]['identity'][-1:]:
                 continue
             if '_1' == operation_dict[row['operation_id']]['nop'][-2:]:

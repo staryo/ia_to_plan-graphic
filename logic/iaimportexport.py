@@ -1,4 +1,5 @@
 import csv
+import json
 import time
 from collections import defaultdict
 from datetime import datetime, date, timedelta
@@ -775,38 +776,56 @@ class IAImportExport(Base):
 
         self._perform_login()
 
-        raport = get_raport_from_csv(self.raport_file)
+        # with open(self.raport_file, 'r', encoding='utf-8') as input_file:
+        #     result = list(csv.DictReader(
+        #         input_file
+        #     ))
+        #
+        # print(result)
 
-        operations, entity = self._get_operations_for_phases()
+        with open(self.raport_file, 'r', encoding='utf-8') as input_file:
+             result = json.load(
+                 input_file
+            )
 
-        result = []
-        # task_date = str(datetime.today().date() + timedelta(days=1))
-        if self.task_date is None or self.task_date == 'today':
-            task_date = str(datetime.today().date())
-        else:
-            task_date = self.task_date
-        if self.task_time is None:
-            task_time = '07:00:00'
-        else:
-            task_time = self.task_time
-        # task_time = '19:00:00'
+        print(result)
 
-        for row in raport:
-            for operation in operations[row['CODE']]:
-                result.append({
-                    'identity': '{}_{}_{}'.format(
-                        task_date,
-                        task_time,
-                        operation.replace('№', '-')
-                    ),
-                    'operationIdentity': operation,
-                    'assemblyElementIdentity': entity[row['CODE']],
-                    'quantityPlan': float(row['QUANTITY']),
-                    'dateBegin': task_date,
-                    'timeBegin': task_time,
-                })
 
-        return result
+        # raport = get_raport_from_csv()
+
+        # operations, entity = self._get_operations_for_phases()
+
+        today = datetime.strftime(datetime.now(), '%Y-%m-%d')
+
+        try:
+            with open(
+                    "tasks.csv.bak",
+                    'r'
+            ) as all_positions:
+                data = csv.DictReader(all_positions)
+                for row in data:
+                    if row['dateBegin'] < today:
+                        continue
+                    if row['identity'] not in result:
+                        result[row['identity']] = {
+                            key: value for key, value in row.items()
+                        }
+                        result[row['identity']]['quantityPlan'] = 0
+        except FileNotFoundError:
+            pass
+
+        keys = list(result.values())[0].keys()
+
+        with open(
+                "tasks.csv.bak",
+                mode='w',
+                newline=''
+        ) as output_file:
+            dict_writer = csv.DictWriter(output_file, keys)
+            dict_writer.writeheader()
+            dict_writer.writerows(list(result.values()))
+
+        return list(dict(sorted(result.items())).values())
 
     def _get_operations_for_phases(self):
         route_phase_dict = list_to_dict(

@@ -31,7 +31,7 @@ class IAImportExport(Base):
     def __init__(self, login, password, base_url, erp_fact_csv,
                  erp_plan_csv, phase_name_length, departments_for_pg_plan,
                  task_date, task_time, raport_file, short_phase_name_length,
-                 daily_task_period, config,
+                 daily_task_period, employee, config,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._base_url = base_url
@@ -50,6 +50,7 @@ class IAImportExport(Base):
         self.task_time = task_time
         self.raport_file = raport_file
         self.daily_task_period = daily_task_period
+        self.employee = employee
 
         self.config = config
 
@@ -827,6 +828,19 @@ class IAImportExport(Base):
 
         return list(dict(sorted(result.items())).values())
 
+    def export_ca_employee_from_file(
+            self
+    ):
+
+        self._perform_login()
+
+        with open(self.employee, 'r', encoding='utf-8') as input_file:
+            result = list(csv.DictReader(
+                input_file
+            ))
+
+        return(result)
+
     def _get_operations_for_phases(self):
         route_phase_dict = list_to_dict(
             self._get_from_rest_collection('entity_route_phase')
@@ -1174,5 +1188,6 @@ class IAImportExport(Base):
             config.get('raport_file'),
             config.get('short_phase_name_length'),
             config.get('daily_task_period'),
+            config.get('employee'),
             config
         )

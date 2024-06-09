@@ -220,6 +220,29 @@ class IAImportExport(Base):
             'className': row['name'],
         } for row in equipment]
 
+    def export_ca_equipment_new(self):
+        self._perform_login()
+        equipment = self._get_from_rest_collection('equipment')
+        departments_dict = list_to_dict(
+            self._get_from_rest_collection('department')
+        )
+        equipment_class_dict = list_to_dict(
+            self._get_from_rest_collection('equipment_class')
+        )
+        report = []
+        for row in equipment:
+            if row['identity']:
+                report.append({
+                    'identity': row['identity'],
+                    'number': row['identity'],
+                    'model': row['name'],
+                    'workCenterIdentity': equipment_class_dict[row['equipment_class_id']]['identity'],
+                    'departmentIdentity': departments_dict[row['department_id']]['identity'],
+                })
+            continue
+
+        return report
+
     def export_ca_spec(self):
         self._perform_login()
         entities_dict = list_to_dict(self._get_from_rest_collection('entity'))

@@ -665,24 +665,30 @@ class IAImportExport(Base):
                    f"на {self.daily_task_period} часов из сессии {session}")
 
         tasks = self._perform_get(
-            'rest/collection/simulation_operation_task?'
-            'order_by=start_time&asc=true&'
-            'order_by=id&asc=true&'
-            'with=simulation_entity_batch&'
-            'with=operation&'
-            'with=operation.entity_route&'
-            'filter={{ simulation_entity_batch.simulation_session_id eq {} }} '
-            'and {{ start_time le {}}}'
-            'and {{ type eq 0 }}'.format(session, self.daily_task_period)
+            'rest/collection/simulation_equipment?'
+            'order_by=simulation_operation_task_equipment.simulation_operation_task.start_date&asc=true&'
+            'order_by=id&asc=true&order_by=simulation_operation_task_equipment.simulation_operation_task_id&asc=true&with=equipment&with_strict=false&with=equipment_class&with=simulation_operation_task_equipment&with=department&with=simulation_operation_task_equipment.simulation_operation_task&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch&with=simulation_operation_task_equipment.simulation_operation_task.operation&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_group&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.operation.entity_route&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.entity&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch.order&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_entity_route_phase&with_strict=false&'         
+            'filter={{simulation_session_id eq {} }} '
+            'and {{ simulation_operation_task.start_time le {}}}'
+            'and {{ simulation_operation_task.type eq 0 }}'.format(session, self.daily_task_period)
         )
 
+        simulation_equipment_dict = list_to_dict(tasks['simulation_equipment'])
+        simulation_operation_task_equipment_dict = list_to_dict(tasks['simulation_operation_task_equipment'], 'simulation_operation_task_id')
         operation_dict = list_to_dict(tasks['operation'])
         entity_routes_dict = list_to_dict(tasks['entity_route'])
         department_dict = list_to_dict(self._get_from_rest_collection('department'))
+        equipment_dict = list_to_dict(tasks['equipment'])
 
         report = defaultdict(
             lambda: defaultdict(
                 lambda: defaultdict(int)
+            )
+        )
+
+        report_equipment = defaultdict(
+            lambda: defaultdict(
+                lambda: defaultdict(lambda: defaultdict(int))
             )
         )
 
@@ -750,6 +756,14 @@ class IAImportExport(Base):
                 row['entity_amount'] * (row['stop_labor'] or 1)
             ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
+            curr_eq = equipment_dict[simulation_equipment_dict[
+                simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id']]['identity'] if simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id'] else False
+
+            if curr_eq:
+                report_equipment[operation_identity][task_date][task_time][curr_eq] += floor(
+                    row['entity_amount'] * (row['stop_labor'] or 1)
+                ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
+
         result = {
             f'{task_date}_{task_time}_{operation}':
             {
@@ -759,6 +773,12 @@ class IAImportExport(Base):
                 'quantityPlan': report[operation][task_date][task_time],
                 'dateBegin': task_date,
                 'timeBegin': task_time,
+                'equipments': [
+                    {
+                        "identity": curr_eq,
+                        "quantity": quantity
+                    } for curr_eq, quantity in report_equipment[operation][task_date][task_time].items()
+                ],
             } for operation in report
             for task_date in report[operation]
             for task_time in report[operation][task_date]

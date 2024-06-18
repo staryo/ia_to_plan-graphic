@@ -798,6 +798,7 @@ class IAImportExport(Base):
                             key: value for key, value in row.items()
                         }
                         result[row['identity']]['quantityPlan'] = 0
+                        result[row['identity']]['equipments'] = None
         except FileNotFoundError:
             pass
 

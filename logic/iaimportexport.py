@@ -665,12 +665,10 @@ class IAImportExport(Base):
                    f"на {self.daily_task_period} часов из сессии {session}")
 
         tasks = self._perform_get(
-            'rest/collection/simulation_equipment?'
-            'order_by=simulation_operation_task_equipment.simulation_operation_task.start_date&asc=true&'
-            'order_by=id&asc=true&order_by=simulation_operation_task_equipment.simulation_operation_task_id&asc=true&with=equipment&with_strict=false&with=equipment_class&with=simulation_operation_task_equipment&with=department&with=simulation_operation_task_equipment.simulation_operation_task&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch&with=simulation_operation_task_equipment.simulation_operation_task.operation&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_group&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.operation.entity_route&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.entity&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch.order&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_entity_route_phase&with_strict=false&'         
-            'filter={{simulation_session_id eq {} }} '
-            'and {{ simulation_operation_task.start_time le {}}}'
-            'and {{ simulation_operation_task.type eq 0 }}'.format(session, self.daily_task_period)
+          '/rest/collection/simulation_equipment?order_by=simulation_operation_task_equipment.simulation_operation_task.start_date&asc=true&order_by=id&asc=true&order_by=simulation_operation_task_equipment.simulation_operation_task_id&asc=true&with=equipment&with_strict=false&with=equipment_class&with=simulation_operation_task_equipment&with=department&with=simulation_operation_task_equipment.simulation_operation_task&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch&with=simulation_operation_task_equipment.simulation_operation_task.operation&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_group&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.operation.entity_route&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.entity&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch.order&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_entity_route_phase&with_strict=false&'
+          'filter= {{simulation_operation_task_equipment.simulation_operation_task.start_time le {} }} '
+          'and {{simulation_session_id eq {} }}'
+          'and {{simulation_operation_task_equipment.simulation_operation_task.type in ["0"] }}'.format(self.daily_task_period, session)
         )
 
         simulation_equipment_dict = list_to_dict(tasks['simulation_equipment'])

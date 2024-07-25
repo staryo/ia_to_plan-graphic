@@ -231,6 +231,7 @@ class IAImportExport(Base):
         )
         report = []
         for row in equipment:
+            equipment_class_dict[row['equipment_class_id']]['department_identity'] = departments_dict[row['department_id']]['identity']
             if row['identity']:
                 report.append({
                     'identity': row['identity'],
@@ -240,6 +241,18 @@ class IAImportExport(Base):
                     'departmentIdentity': departments_dict[row['department_id']]['identity'],
                 })
             continue
+        for row in equipment_class_dict.values():
+            if row['name'] in ['Ручные операции', 'Контроль']:
+                try:
+                    report.append({
+                        'identity': f"{row['department_identity']}_{row['identity']}",
+                        'number': f"{row['department_identity']}_{row['name']}",
+                        'model': row['name'],
+                        'workCenterIdentity': row['identity'],
+                        'departmentIdentity': row['department_identity'],
+                    })
+                except KeyError:
+                    print(f"для РЦ {row['identity']} не определено подразделение")
 
         return report
 
@@ -677,6 +690,7 @@ class IAImportExport(Base):
         entity_routes_dict = list_to_dict(tasks['entity_route'])
         department_dict = list_to_dict(self._get_from_rest_collection('department'))
         equipment_dict = list_to_dict(tasks['equipment'])
+        equipment_class_dict = list_to_dict(tasks['equipment_class'])
 
         report = defaultdict(
             lambda: defaultdict(
@@ -754,13 +768,31 @@ class IAImportExport(Base):
                 row['entity_amount'] * (row['stop_labor'] or 1)
             ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
-            curr_eq = equipment_dict[simulation_equipment_dict[
-                simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id']]['identity'] if simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id'] else False
+            if equipment_class_dict[simulation_equipment_dict[
+                simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']][
+                'name'] in ['Ручные операции', 'Контроль']:
+                curr_eq = f"{department_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['department_id']]['identity']}_{equipment_class_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']]['identity']}"
+            else:
+                curr_eq = equipment_dict[simulation_equipment_dict[
+                simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id']]['identity'] \
+                if simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id'] else False
+
+            # fake_eq = (f"{department_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['department_id']]['identity']}_"
+            #            f"{equipment_class_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']]['identity']}")
+
+            # if operation_dict[row['operation_id']]['identity'] == '0000001080T0000015_ZA01_0080р':
+            #    print('a')
+            # if operation_dict[row['operation_id']]['identity'] == '0000001080T0000016_ZA01_0020р':
+            #    print('a')
 
             if curr_eq:
                 report_equipment[operation_identity][task_date][task_time][curr_eq] += floor(
                     row['entity_amount'] * (row['stop_labor'] or 1)
                 ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
+            # else:
+            #     report_equipment[operation_identity][task_date][task_time][fake_eq] += floor(
+            #         row['entity_amount'] * (row['stop_labor'] or 1)
+            #     ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
         result = {
             f'{task_date}_{task_time}_{operation}':

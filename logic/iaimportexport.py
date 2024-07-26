@@ -242,11 +242,11 @@ class IAImportExport(Base):
                 })
             continue
         for row in equipment_class_dict.values():
-            if row['name'] in ['Ручные операции', 'Контроль']:
+            if row['name'] in ['Ручные операции']:
                 try:
                     report.append({
                         'identity': f"{row['department_identity']}_{row['identity']}",
-                        'number': f"{row['department_identity']}_{row['name']}",
+                        'number': row['name'],
                         'model': row['name'],
                         'workCenterIdentity': row['identity'],
                         'departmentIdentity': row['department_identity'],
@@ -254,6 +254,15 @@ class IAImportExport(Base):
                 except KeyError:
                     print(f"для РЦ {row['identity']} не определено подразделение")
 
+
+        for row in departments_dict.values():
+            report.append({
+                            'identity': f"{row['name'].replace('-','')}777",
+                            'number': 'Контроль',
+                            'model': 'Контроль',
+                            'workCenterIdentity': 'Контроль',
+                            'departmentIdentity': row['identity'],
+                        })
         return report
 
     def export_ca_spec(self):
@@ -768,10 +777,14 @@ class IAImportExport(Base):
                 row['entity_amount'] * (row['stop_labor'] or 1)
             ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
-            if equipment_class_dict[simulation_equipment_dict[
-                simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']][
-                'name'] in ['Ручные операции', 'Контроль']:
-                curr_eq = f"{department_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['department_id']]['identity']}_{equipment_class_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']]['identity']}"
+            curr_wc = equipment_class_dict[simulation_equipment_dict[simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_class_id']]
+
+            if curr_wc['name'] in ['Ручные операции']:
+                curr_eq = curr_wc['identity']
+            elif curr_wc['name'] in ['Контроль']:
+                curr_dep = department_dict[simulation_equipment_dict[
+                    simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['department_id']]
+                curr_eq = f"{curr_dep['name'].replace('-','')}777"
             else:
                 curr_eq = equipment_dict[simulation_equipment_dict[
                 simulation_operation_task_equipment_dict[row['id']]['simulation_equipment_id']]['equipment_id']]['identity'] \

@@ -245,7 +245,7 @@ class IAImportExport(Base):
             if row['name'] in ['Ручные операции']:
                 try:
                     report.append({
-                        'identity': f"{row['department_identity']}_{row['identity']}",
+                        'identity': row['identity'],
                         'number': row['name'],
                         'model': row['name'],
                         'workCenterIdentity': row['identity'],

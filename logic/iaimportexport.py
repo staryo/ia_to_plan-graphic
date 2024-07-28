@@ -215,10 +215,26 @@ class IAImportExport(Base):
     def export_ca_equipment(self):
         self._perform_login()
         equipment = self._get_from_rest_collection('equipment_class')
-        return [{
-            'identity': row['identity'],
-            'className': row['name'],
-        } for row in equipment]
+        # return [{
+        #     'identity': row['identity'],
+        #     'className': row['name'],
+        # } for row in equipment]
+        departments_dict = list_to_dict(
+            self._get_from_rest_collection('department')
+        )
+        report = []
+        for row in equipment:
+            if row['name'] != 'Контроль':
+                report.append({
+                    'identity': row['identity'],
+                    'className': row['name'],
+                })
+        for row in departments_dict.values():
+            report.append({
+                            'identity': f"{row['name'].replace('-','')}777",
+                            'className': 'Контроль',
+                        })
+        return report
 
     def export_ca_equipment_new(self):
         self._perform_login()
@@ -260,7 +276,7 @@ class IAImportExport(Base):
                             'identity': f"{row['name'].replace('-','')}777",
                             'number': 'Контроль',
                             'model': 'Контроль',
-                            'workCenterIdentity': 'Контроль',
+                            'workCenterIdentity': f"{row['name'].replace('-','')}777",
                             'departmentIdentity': row['identity'],
                         })
         return report
@@ -496,6 +512,8 @@ class IAImportExport(Base):
                 phase_identity,
                 row['nop'].split('_')[-1]
             )
+            # if equipment_class_dict[equipment_class_id]['name'] != 'Контроль':
+            #     continue
 
             report.append({
                 'identity': operation_identity,
@@ -505,7 +523,7 @@ class IAImportExport(Base):
                 'departmentIdentity':
                     departments_dict[department_id]['identity'],
                 'workCenterIdentity':
-                    equipment_class_dict[equipment_class_id]['identity'],
+                    equipment_class_dict[equipment_class_id]['identity'] if equipment_class_dict[equipment_class_id]['name'] != 'Контроль' else f"{departments_dict[department_id]['name'].replace('-','')}777",
                 'technologicalProcessIdentity':
                     entity_routes_dict[row['entity_route_id']]['identity'],
                 'number': row['nop'],

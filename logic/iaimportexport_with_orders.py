@@ -11,7 +11,7 @@ from urllib.parse import urljoin
 from requests import Session
 from tqdm import tqdm
 
-from utils.list_to_dict import list_to_dict
+from utils.list_to_dict import list_to_dict, list_to_defdict
 from .base import Base
 
 __all__ = [
@@ -52,14 +52,14 @@ class IAImportExport(Base):
         self.daily_task_period = daily_task_period
         self.employee = employee
 
-        self.entity_orders = defaultdict(list)
-        self.routes_orders = defaultdict(list)
+        self.entity_orders = defaultdict(set)
+        self.routes_orders = defaultdict(set)
+        self.cache = {}
+        self.config = config
 
         self.collect_orders_from_daily_tasks()
 
-        self.config = config
 
-        self.cache = {}
 
     def __enter__(self):
         return self
@@ -196,9 +196,9 @@ class IAImportExport(Base):
         self._perform_login()
         return [
             {
-                'identity': f"{entity['identity']}_{order}",
+                'identity': f"{order}_{entity['identity']}",
                 'name': entity['name'],
-                'vendorCode': entity['identity']
+                'vendorCode': f"{order}_{entity['identity']}"
             } for entity in self._get_from_rest_collection('entity')
             for order in self.entity_orders[entity['identity']]
         ]
@@ -313,7 +313,7 @@ class IAImportExport(Base):
                         'name': row['identity'],
                     }
                 )
-                self.routes_orders[row['identity']].append(order)
+                self.routes_orders[row['identity']].add(order)
 
         return report
 
@@ -376,7 +376,7 @@ class IAImportExport(Base):
                             'priority': 999,
                             'departmentIdentity': dept,
                         })
-                        print(report[-1])
+                        # print(report[-1])
                 unique_identities.add(
                     f"{phase_identity[:self.phase_name_length]}_VPSK"
                 )
@@ -406,7 +406,7 @@ class IAImportExport(Base):
         operations_filtered = list(
             filter(
                 lambda x: ('с' not in x['identity']) and
-                          ('н' not in x['identity']) and
+                          # ('н' not in x['identity']) and
                           (x['identity'][-1:] != 'Ц') and
                           (x['nop'][-2:] != '_1') and
                           (x['identity'][-2:] != 'MH') and
@@ -444,8 +444,24 @@ class IAImportExport(Base):
             )
 
             for order in self.entity_orders[entity_dict[entity_id]['identity']]:
+                if row['setup_time'] != 0:
+                    op_name = f"Наладка_{row['name']}"
+                    op_num = f"{row['nop']}H"
+                    op_time = round(row['setup_time'] / 60 / 60 * 10000) / 10000
+                    op_identity = f"{order}_{operation_identity}Н"
+                elif row['prep_time'] != 0:
+                    op_name = f"ПЗ_{row['name']}"
+                    op_num = f"{row['nop']}ПЗ"
+                    op_time = round(row['prep_time'] / 60 / 60 * 10000) / 10000
+                    op_identity = f"{order}_{operation_identity}ПЗ"
+                else:
+                    op_name = row['name']
+                    op_num = row['nop']
+                    op_time = round(row['prod_time'] / 60 / 60 * 10000) / 10000
+                    op_identity = f"{order}_{operation_identity}"
+
                 report.append({
-                    'identity': f"{order}_{operation_identity}",
+                    'identity': op_identity,
                     'transitionIdentity': f"{order}_{phase_identity}",
                     'assemblyElementIdentity': f"{order}_{entity_dict[entity_id]['identity']}",
                     'departmentIdentity':
@@ -455,10 +471,10 @@ class IAImportExport(Base):
                         equipment_class_dict[equipment_class_id][
                             'name'] != 'Контроль' else f"{departments_dict[department_id]['name'].replace('-', '')}777",
                     'technologicalProcessIdentity': f"{order}_{entity_routes_dict[row['entity_route_id']]['identity']}",
-                    'number': row['nop'],
+                    'number': op_num,
                     'priority': operation_priority[entity_route_id],
-                    'name': row['name'],
-                    'pieceTime': round(row['prod_time'] / 60 / 60 * 10000) / 10000
+                    'name': op_name,
+                    'pieceTime': op_time
                 })
 
         return report
@@ -488,7 +504,8 @@ class IAImportExport(Base):
         operation_dict = list_to_dict(tasks['operation'])
         entity_routes_dict = list_to_dict(tasks['entity_route'])
         department_dict = list_to_dict(self._get_from_rest_collection('department'))
-        simulation_entity_batch_dict = list_to_dict('simulation_entity_batch')
+        simulation_entity_batch_dict = list_to_dict(tasks['simulation_entity_batch'])
+        simulation_order_entity_batch_dict = list_to_dict(tasks['simulation_order_entity_batch'], column='simulation_entity_batch_id')
 
         operation_entity_dict = {}
         today = datetime.strftime(datetime.now(), '%Y-%m-%d')
@@ -550,11 +567,11 @@ class IAImportExport(Base):
 
             # simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch.order
             order = order_dict[
-                simulation_entity_batch_dict[
+                simulation_order_entity_batch_dict[simulation_entity_batch_dict[
                     row['simulation_entity_batch_id']
-                ]['order_id']
-            ]['name']
-            self.entity_orders[entities_dict[entity_id]['identity']].append(order)
+                ]['id']]['order_id']
+            ]['name'][:9]
+            self.entity_orders[entities_dict[entity_id]['identity']].add(order)
 
     def export_ca_daily_tasks(self):
 
@@ -575,8 +592,7 @@ class IAImportExport(Base):
         tasks = self._perform_get(
             '/rest/collection/simulation_equipment?order_by=simulation_operation_task_equipment.simulation_operation_task.start_date&asc=true&order_by=id&asc=true&order_by=simulation_operation_task_equipment.simulation_operation_task_id&asc=true&with=equipment&with_strict=false&with=equipment_class&with=simulation_operation_task_equipment&with=department&with=simulation_operation_task_equipment.simulation_operation_task&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch&with=simulation_operation_task_equipment.simulation_operation_task.operation&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_group&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.operation.entity_route&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.entity&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch&with_strict=false&with=simulation_operation_task_equipment.simulation_operation_task.simulation_entity_batch.simulation_order_entity_batch.order&with=simulation_operation_task_equipment.simulation_operation_task.operation.operation_entity_route_phase&with_strict=false&'
             'filter= {{simulation_operation_task_equipment.simulation_operation_task.start_time le {} }} '
-            'and {{simulation_session_id eq {} }}'
-            'and {{simulation_operation_task_equipment.simulation_operation_task.type in ["0"] }}'.format(
+            'and {{simulation_session_id eq {} }}'.format(
                 self.daily_task_period, session)
         )
 
@@ -589,10 +605,15 @@ class IAImportExport(Base):
         department_dict = list_to_dict(self._get_from_rest_collection('department'))
         equipment_dict = list_to_dict(tasks['equipment'])
         equipment_class_dict = list_to_dict(tasks['equipment_class'])
+        simulation_entity_batch_dict = list_to_dict(tasks['simulation_entity_batch'])
+        simulation_order_entity_batch_dict = list_to_dict(tasks['simulation_order_entity_batch'],
+                                                          column='simulation_entity_batch_id')
 
         report = defaultdict(
             lambda: defaultdict(
-                lambda: defaultdict(int)
+                lambda: defaultdict(
+                    lambda: defaultdict(int)
+                )
             )
         )
 
@@ -626,19 +647,36 @@ class IAImportExport(Base):
                 continue
             # if 'н' in operation_dict[row['operation_id']]['identity']:
             #     continue
-            # if 'с' in operation_dict[row['operation_id']]['identity']:
-            #     continue
+            if 'с' in operation_dict[row['operation_id']]['identity']:
+                continue
 
             entity_id = entity_routes_dict[entity_route_id]['entity_id']
+
+            order = order_dict[
+                simulation_order_entity_batch_dict[simulation_entity_batch_dict[
+                    row['simulation_entity_batch_id']
+                ]['id']]['order_id']
+            ]['name'][:9]
 
             phase_identity = self.get_phase_with_operation_id(
                 row['operation_id']
             )
             try:
-                operation_identity = '{}_{}'.format(
-                    phase_identity,
-                    nop.split('_')[1]
-                )
+                if operation_dict[row['operation_id']]['setup_time'] != 0:
+                    operation_identity = '{}_{}Н'.format(
+                        phase_identity,
+                        nop.split('_')[-1]
+                    )
+                elif operation_dict[row['operation_id']]['prep_time'] != 0:
+                    operation_identity = '{}_{}ПЗ'.format(
+                        phase_identity,
+                        nop.split('_')[-1]
+                    )
+                else :
+                    operation_identity = '{}_{}'.format(
+                        phase_identity,
+                        nop.split('_')[-1]
+                    )
             except IndexError:
                 continue
 
@@ -664,7 +702,7 @@ class IAImportExport(Base):
             if task_date < today:
                 continue
 
-            report[operation_identity][task_date][task_time] += floor(
+            report[order][operation_identity][task_date][task_time] += floor(
                 row['entity_amount'] * (row['stop_labor'] or 1)
             ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
@@ -690,24 +728,70 @@ class IAImportExport(Base):
                     row['entity_amount'] * (row['stop_labor'] or 1)
                 ) - floor(row['entity_amount'] * (row['start_labor'] or 0))
 
-        result = {
-            f'{task_date}_{task_time}_{operation}':
+            # if operation_dict[row['operation_id']] != 0:
+            #     op_name = f"Наладка_{row['name']}"
+            #     op_num = f"{row['nop']}H"
+            #     op_time = round(row['setup_time'] / 60 / 60 * 10000) / 10000
+            #     op_identity = f"{order}_{operation_identity}Н"
+            # elif operation_dict[row['operation_id']]['prep_time'] != 0:
+            #     op_name = f"ПЗ_{row['name']}"
+            #     op_num = f"{row['nop']}ПЗ"
+            #     op_time = round(row['prep_time'] / 60 / 60 * 10000) / 10000
+            #     op_identity = f"{order}_{operation_identity}ПЗ"
+            # else:
+            #     op_name = row['name']
+            #     op_num = row['nop']
+            #     op_time = round(row['prod_time'] / 60 / 60 * 10000) / 10000
+            #     op_identity = f"{order}_{operation_identity}"
+
+
+        # for order in report:
+        #     for operation in report[order]:
+        #         for task_date in report[order][operation]:
+        #             for task_time in report[order][operation][task_date]:
+        #                 if operation_dict[operation]['setup_time'] != 0:
+        #                     op_identity = f"{order}_{operation}Н"
+        #                 elif operation_dict[operation]['prep_time'] != 0:
+        #                     op_identity = f"{order}_{operation}ПЗ"
+        #                 else:
+        #                     op_identity = f"{order}_{operation}"
+        #
+        #                 result = {f'{task_date}_{task_time}_{op_identity}':
+        #                     {
+        #                         'identity': f'{task_date}_{task_time}_{op_identity}',
+        #                         'operationIdentity': op_identity,
+        #                         'assemblyElementIdentity': f"{order}_{operation_entity_dict[operation]}",
+        #                         'quantityPlan': report[order][operation][task_date][task_time],
+        #                         'dateBegin': task_date,
+        #                         'timeBegin': task_time,
+        #                         'equipments': [
+        #                             {
+        #                                 "identity": curr_eq,
+        #                                 "quantity": quantity if operation_dict[operation]['setup_time'] == 0 and operation_dict[operation]['prep_time'] == 0 else 1
+        #                             } for curr_eq, quantity in report_equipment[operation][task_date][task_time].items()
+        #                         ],
+        #                     }
+        #                 }
+
+        result= {
+            f'{order}_{task_date}_{task_time}_{operation}':
                 {
-                    'identity': f'{task_date}_{task_time}_{operation}',
-                    'operationIdentity': f"{self.entity_orders[operation_entity_dict[operation]]}_{operation}",
-                    'assemblyElementIdentity': f"{self.entity_orders[operation_entity_dict[operation]]}_{operation_entity_dict[operation]}",
-                    'quantityPlan': report[operation][task_date][task_time],
+                    'identity': f'{order}_{task_date}_{task_time}_{operation}',
+                    'operationIdentity': f"{order}_{operation}",
+                    'assemblyElementIdentity': f"{order}_{operation_entity_dict[operation]}",
+                    'quantityPlan': 1 if 'Н' in operation or 'ПЗ' in operation else report[order][operation][task_date][task_time],
                     'dateBegin': task_date,
                     'timeBegin': task_time,
                     'equipments': [
                         {
                             "identity": curr_eq,
-                            "quantity": quantity
+                            "quantity": 1 if 'Н' in operation or 'ПЗ' in operation else quantity
                         } for curr_eq, quantity in report_equipment[operation][task_date][task_time].items()
                     ],
-                } for operation in report
-            for task_date in report[operation]
-            for task_time in report[operation][task_date]
+                } for order in report
+            for operation in report[order]
+            for task_date in report[order][operation]
+            for task_time in report[order][operation][task_date]
         }
 
         try:

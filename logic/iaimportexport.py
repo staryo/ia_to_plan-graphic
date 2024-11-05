@@ -14,6 +14,8 @@ from tqdm import tqdm
 from utils.list_to_dict import list_to_dict
 from .base import Base
 
+from utils.excel import excel_to_dict, dict_to_excel
+
 __all__ = [
     'IAImportExport',
 ]
@@ -30,7 +32,7 @@ class IAImportExport(Base):
 
     def __init__(self, login, password, base_url, erp_fact_csv,
                  erp_plan_csv, phase_name_length, departments_for_pg_plan,
-                 task_date, task_time, raport_file, short_phase_name_length,
+                 task_date, task_time, raport_file, equipment_update, short_phase_name_length,
                  daily_task_period, employee, config,
                  *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -49,6 +51,7 @@ class IAImportExport(Base):
         self.task_date = task_date
         self.task_time = task_time
         self.raport_file = raport_file
+        self.equipment_update = equipment_update
         self.daily_task_period = daily_task_period
         self.employee = employee
 
@@ -238,6 +241,27 @@ class IAImportExport(Base):
 
     def export_ca_equipment_new(self):
         self._perform_login()
+        equipment_update_dict = {}
+        try:
+            equipment_update = excel_to_dict(self.equipment_update)
+            for row in equipment_update:
+                equipment_update_dict[row['IDENTITY']] = row['ADD_NUMBER']
+            # with open(self.equipment_update,
+            #         'r'
+            # ) as equipment_update:
+            #     data = csv.DictReader(equipment_update)
+            #     # for row in data:
+                #     if row['dateBegin'] < today:
+                #         continue
+                #     if row['identity'] not in result:
+                #         result[row['identity']] = {
+                #             key: value for key, value in row.items()
+                #         }
+                #         result[row['identity']]['quantityPlan'] = 0
+                #         result[row['identity']]['equipments'] = None
+        except FileNotFoundError:
+            pass
+
         equipment = self._get_from_rest_collection('equipment')
         departments_dict = list_to_dict(
             self._get_from_rest_collection('department')
@@ -251,8 +275,8 @@ class IAImportExport(Base):
             if row['identity']:
                 report.append({
                     'identity': row['identity'],
-                    'number': row['identity'],
-                    'model': row['name'],
+                    'number': row['identity'] ,
+                    'model': row['name'] if row['identity'] not in equipment_update_dict else f"{equipment_update_dict[row['identity']]}_{row['name']}",
                     'workCenterIdentity': equipment_class_dict[row['equipment_class_id']]['identity'],
                     'departmentIdentity': departments_dict[row['department_id']]['identity'],
                 })
@@ -1291,6 +1315,7 @@ class IAImportExport(Base):
             config.get('task_date'),
             config.get('task_time'),
             config.get('raport_file'),
+            config.get('equipment_update'),
             config.get('short_phase_name_length'),
             config.get('daily_task_period'),
             config.get('employee'),

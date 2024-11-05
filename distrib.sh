@@ -18,9 +18,9 @@ docker run \
     -v "${PROJECT_DIRPATH}:/usr/src/myapp" \
     python:3.10-bullseye bash -c "pip install -r requirements.txt;
                                pip3 install pyinstaller;
-                               pyinstaller script/export_to_plgr.py \
+                               pyinstaller script/export_to_plgr_with_orders.py \
                                --clean \
-                               --name export_to_plgr \
+                               --name export_to_plgr_with_orders \
                                --distpath=dist/linux/ \
                                --onefile -y;
                                chown -R ${UID} dist; "
